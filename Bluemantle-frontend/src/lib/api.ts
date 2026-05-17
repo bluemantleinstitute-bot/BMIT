@@ -1,13 +1,74 @@
-// Removed static import of next/headers as it breaks Client Components
-
-
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60;
+
+type AuthSessionResponse = {
+  token?: string;
+  user?: {
+    role?: string;
+    name?: string;
+    userId?: string;
+  };
+};
+
+function isBrowser() {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
+function secureCookieAttribute() {
+  return isBrowser() && window.location.protocol === "https:" ? "; Secure" : "";
+}
+
+export function getBrowserCookie(name: string) {
+  if (!isBrowser()) return "";
+
+  const cookie = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${name}=`));
+
+  return cookie ? decodeURIComponent(cookie.split("=").slice(1).join("=")) : "";
+}
+
+function setBrowserCookie(name: string, value: string, maxAge = AUTH_COOKIE_MAX_AGE) {
+  if (!isBrowser()) return;
+
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secureCookieAttribute()}`;
+}
+
+export function clearBrowserAuthSession() {
+  if (!isBrowser()) return;
+
+  ["token", "user_role", "user_name"].forEach((name) => {
+    document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secureCookieAttribute()}`;
+  });
+  localStorage.removeItem("bluemantle_session");
+}
+
+export function persistBrowserAuthSession(data: AuthSessionResponse) {
+  if (!data?.token || !data?.user?.role) return;
+
+  setBrowserCookie("token", data.token);
+  setBrowserCookie("user_role", data.user.role);
+  setBrowserCookie("user_name", data.user.name || "");
+
+  if (isBrowser()) {
+    localStorage.setItem(
+      "bluemantle_session",
+      JSON.stringify({
+        role: data.user.role,
+        name: data.user.name || "",
+        userId: data.user.userId || "",
+        savedAt: Date.now(),
+      })
+    );
+  }
+}
 
 export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
   
   const isServer = typeof window === "undefined";
-  let authHeaders: Record<string, string> = {};
+  const authHeaders: Record<string, string> = {};
 
   if (isServer) {
     try {
@@ -19,6 +80,11 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
       }
     } catch (e) {
       console.warn("Could not import next/headers on server:", e);
+    }
+  } else {
+    const token = getBrowserCookie("token");
+    if (token) {
+      authHeaders.Authorization = `Bearer ${token}`;
     }
   }
 
@@ -42,9 +108,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 
       if (!isAuthEndpoint && (response.status === 401 || response.status === 403)) {
         if (!isServer) {
-          document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-          document.cookie = "user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-          document.cookie = "user_name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          clearBrowserAuthSession();
         }
         if (isServer) {
           const { redirect } = await import("next/navigation");

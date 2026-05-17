@@ -1,20 +1,42 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { KnowledgeCard, CardHeader, CardBody } from "@/components/KnowledgeCard";
 import { cn } from "@/lib/utils";
 import { ShieldAlert } from "lucide-react";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, persistBrowserAuthSession } from "@/lib/api";
+
+type LoginResponse = {
+  success?: boolean;
+  requireOtp?: boolean;
+  token?: string;
+  user?: {
+    role?: string;
+    name?: string;
+    userId?: string;
+  };
+};
+
+const dashboardPathByRole: Record<string, string> = {
+  student: "/student",
+  teacher: "/teacher",
+  admin: "/admin",
+  owner: "/admin",
+};
+
+function completeLogin(data: LoginResponse) {
+  persistBrowserAuthSession(data);
+  const role = data?.user?.role;
+  const dashboardPath = role ? dashboardPathByRole[role] : undefined;
+  window.location.assign(dashboardPath || "/");
+}
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [isOtpStep, setIsOtpStep] = useState(false);
-  const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -23,7 +45,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const data = await apiRequest("/auth/login", {
+      const data: LoginResponse = await apiRequest("/auth/login", {
         method: "POST",
         body: JSON.stringify({ userId: email, password }),
       });
@@ -31,10 +53,7 @@ export default function LoginPage() {
       if (data.requireOtp) {
         setIsOtpStep(true);
       } else if (data.success) {
-        // Redirect based on role
-        if (data.user.role === "student") router.push("/student");
-        else if (data.user.role === "teacher") router.push("/teacher");
-        else if (data.user.role === "admin" || data.user.role === "owner") router.push("/admin");
+        completeLogin(data);
       }
     } catch (err: any) {
       setError(err.message || "Invalid credentials or unauthorized account.");
@@ -52,15 +71,13 @@ export default function LoginPage() {
 
     try {
       const otp = otpDigits.join("");
-      const data = await apiRequest("/auth/verify-otp", {
+      const data: LoginResponse = await apiRequest("/auth/verify-otp", {
         method: "POST",
         body: JSON.stringify({ userId: email, otp }),
       });
 
       if (data.success) {
-        if (data.user.role === "student") router.push("/student");
-        else if (data.user.role === "teacher") router.push("/teacher");
-        else if (data.user.role === "admin" || data.user.role === "owner") router.push("/admin");
+        completeLogin(data);
       }
     } catch (err: any) {
       setError(err.message || "Invalid or expired OTP");
