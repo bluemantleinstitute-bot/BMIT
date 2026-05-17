@@ -1,0 +1,72 @@
+.secure-video-shell {
+  --secure-accent: var(--color-primary);
+  --secure-on-accent: var(--color-on_primary);
+  background: #000;
+}
+
+.secure-youtube-frame,
+.secure-youtube-frame iframe {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.secure-youtube-frame iframe {
+  border: 0;
+  pointer-events: none;
+}
+
+.secure-control {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.08);
+  color: white;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.secure-control:hover {
+  background: var(--secure-accent);
+  color: var(--secure-on-accent);
+}
+
+.secure-control:active {
+  transform: scale(0.96);
+}
+
+.secure-progress,
+.secure-volume {
+  height: 0.35rem;
+  cursor: pointer;
+  appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--secure-accent), rgb(34 211 238));
+  accent-color: var(--secure-accent);
+}
+
+.secure-volume {
+  width: 5.5rem;
+}
+
+.secure-progress::-webkit-slider-thumb,
+.secure-volume::-webkit-slider-thumb {
+  height: 0.9rem;
+  width: 0.9rem;
+  appearance: none;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.14);
+}
+
+.secure-progress::-moz-range-thumb,
+.secure-volume::-moz-range-thumb {
+  height: 0.9rem;
+  width: 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.14);
+}
