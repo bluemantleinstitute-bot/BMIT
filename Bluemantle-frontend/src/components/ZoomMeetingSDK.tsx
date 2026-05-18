@@ -22,21 +22,25 @@ type ZoomClient = {
   off?: (event: string, callback: (payload: unknown) => void) => void;
 };
 
-type ZoomEmbeddedGlobal = {
-  createClient: () => unknown;
+type ZoomClientViewGlobal = {
+  setZoomJSLib?: (path: string, dir: string) => void;
+  preLoadWasm?: () => void;
+  prepareWebSDK?: () => void;
+  i18n?: {
+    load?: (language: string) => void;
+    reload?: (language: string) => void;
+  };
+  init: (args: Record<string, unknown>) => void;
+  join: (args: Record<string, unknown>) => void;
+  leaveMeeting?: (args?: Record<string, unknown>) => void;
 };
 
 declare global {
   interface Window {
-    ZoomMtgEmbedded?: ZoomEmbeddedGlobal;
-    __bluemantleZoomEmbeddedPromise?: Promise<ZoomEmbeddedGlobal>;
+    ZoomMtg?: ZoomClientViewGlobal;
+    __bluemantleZoomClientPromise?: Promise<ZoomClientViewGlobal>;
   }
 }
-
-type ZoomConnectionPayload = {
-  state?: "Connected" | "Closed" | "Fail" | string;
-  reason?: string;
-};
 
 interface ZoomMeetingProps {
   classId: string;
@@ -64,14 +68,28 @@ const describeZoomError = (error: unknown) => {
 };
 
 const ZOOM_SDK_VERSION = "3.13.2";
+const zoomCdnStyles = [
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/css/bootstrap.css`,
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/css/react-select.css`,
+];
+
 const zoomCdnScripts = [
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/react.min.js`,
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/react-dom.min.js`,
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/redux.min.js`,
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/redux-thunk.min.js`,
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/lodash.min.js`,
-  `https://source.zoom.us/zoom-meeting-embedded-${ZOOM_SDK_VERSION}.min.js`,
+  `https://source.zoom.us/zoom-meeting-${ZOOM_SDK_VERSION}.min.js`,
 ];
+
+const loadStyleOnce = (href: string) => {
+  if (document.querySelector(`link[href="${href}"]`)) return;
+
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  document.head.appendChild(link);
+};
 
 const loadScriptOnce = (src: string) => {
   return new Promise<void>((resolve, reject) => {
@@ -100,22 +118,30 @@ const loadScriptOnce = (src: string) => {
   });
 };
 
-const loadZoomEmbeddedClient = async () => {
-  if (window.ZoomMtgEmbedded) return window.ZoomMtgEmbedded;
+const loadZoomClientView = async () => {
+  if (window.ZoomMtg) return window.ZoomMtg;
 
-  window.__bluemantleZoomEmbeddedPromise ??= (async () => {
+  window.__bluemantleZoomClientPromise ??= (async () => {
+    zoomCdnStyles.forEach(loadStyleOnce);
+
     for (const src of zoomCdnScripts) {
       await loadScriptOnce(src);
     }
 
-    if (!window.ZoomMtgEmbedded) {
-      throw new Error("Zoom embedded client did not initialize.");
+    if (!window.ZoomMtg) {
+      throw new Error("Zoom client did not initialize.");
     }
 
-    return window.ZoomMtgEmbedded;
+    window.ZoomMtg.setZoomJSLib?.(`https://source.zoom.us/${ZOOM_SDK_VERSION}/lib`, "/av");
+    window.ZoomMtg.preLoadWasm?.();
+    window.ZoomMtg.prepareWebSDK?.();
+    window.ZoomMtg.i18n?.load?.("en-US");
+    window.ZoomMtg.i18n?.reload?.("en-US");
+
+    return window.ZoomMtg;
   })();
 
-  return window.__bluemantleZoomEmbeddedPromise;
+  return window.__bluemantleZoomClientPromise;
 };
 
 export default function ZoomMeetingSDK({
@@ -176,8 +202,8 @@ export default function ZoomMeetingSDK({
     setError("");
 
     try {
-      const [ZoomMtgEmbedded, signatureRes] = await Promise.all([
-        loadZoomEmbeddedClient(),
+      const [ZoomMtg, signatureRes] = await Promise.all([
+        loadZoomClientView(),
         apiRequest("/zoom/generate-signature", {
           method: "POST",
           body: JSON.stringify({
@@ -193,71 +219,45 @@ export default function ZoomMeetingSDK({
         throw new Error(signatureRes.message || "Unable to authorize this Zoom session.");
       }
 
-      if (clientRef.current?.leaveMeeting) {
-        await clientRef.current.leaveMeeting().catch(() => undefined);
-      }
-
-      const client = ZoomMtgEmbedded.createClient() as unknown as ZoomClient;
-      clientRef.current = client;
-
-      const handleConnectionChange = (payload: unknown) => {
-        const connection = (payload || {}) as ZoomConnectionPayload;
-        if (connection.state === "Connected") setStatus("connected");
-        if (connection.state === "Closed") setStatus("closed");
-        if (connection.state === "Fail") {
-          setStatus("error");
-          setError(describeZoomError(connection));
-        }
+      const joinMeeting = () => {
+        ZoomMtg.join({
+          signature: signatureRes.signature,
+          sdkKey: signatureRes.sdkKey,
+          meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
+          passWord: signatureRes.password ?? password ?? "",
+          userName: displayName,
+          userEmail: userEmail || "",
+          tk: "",
+          zak: isHost ? signatureRes.zak || "" : "",
+          success: () => {
+            if (mountedRef.current) setStatus("connected");
+          },
+          error: (joinError: unknown) => {
+            if (!mountedRef.current) return;
+            setStatus("error");
+            setError(describeZoomError(joinError));
+          },
+        });
       };
 
-      client.on?.("connection-change", handleConnectionChange);
-
-      await client.init({
-        zoomAppRoot: zoomRootRef.current,
-        language: "en-US",
+      ZoomMtg.init({
+        leaveUrl: window.location.origin + leaveUrl,
         patchJsMedia: true,
         leaveOnPageUnload: true,
-        customize: {
-          meetingInfo: ["topic", "host", "mn", "participant"],
-          video: {
-            isResizable: true,
-            viewSizes: {
-              default: { width: 1100, height: 650 },
-              ribbon: { width: 420, height: 240 },
-            },
-            defaultViewType: "speaker",
-          },
-          participants: {
-            popper: { disableDraggable: false },
-          },
-          chat: {
-            popper: { disableDraggable: false },
-          },
+        success: joinMeeting,
+        error: (initError: unknown) => {
+          if (!mountedRef.current) return;
+          setStatus("error");
+          setError(describeZoomError(initError));
         },
       });
-
-      const joinOptions: Record<string, unknown> = {
-        signature: signatureRes.signature,
-        sdkKey: signatureRes.sdkKey,
-        meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
-        password: signatureRes.password ?? password ?? "",
-        userName: displayName,
-        userEmail: userEmail || undefined,
-      };
-
-      if (isHost && signatureRes.zak) {
-        joinOptions.zak = signatureRes.zak;
-      }
-
-      await client.join(joinOptions);
-      if (mountedRef.current) setStatus("connected");
     } catch (err) {
       console.error("Embedded Zoom failed:", err);
       if (!mountedRef.current) return;
       setStatus("error");
       setError(describeZoomError(err));
     }
-  }, [classId, cleanedMeetingNumber, displayName, isHost, password, userEmail]);
+  }, [classId, cleanedMeetingNumber, displayName, isHost, leaveUrl, password, userEmail]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -269,7 +269,7 @@ export default function ZoomMeetingSDK({
     return () => {
       mountedRef.current = false;
       document.removeEventListener("fullscreenchange", fullscreenHandler);
-      clientRef.current?.leaveMeeting?.().catch(() => undefined);
+      window.ZoomMtg?.leaveMeeting?.({});
     };
   }, [startEmbeddedMeeting]);
 
