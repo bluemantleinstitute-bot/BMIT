@@ -22,6 +22,17 @@ type ZoomClient = {
   off?: (event: string, callback: (payload: unknown) => void) => void;
 };
 
+type ZoomEmbeddedGlobal = {
+  createClient: () => unknown;
+};
+
+declare global {
+  interface Window {
+    ZoomMtgEmbedded?: ZoomEmbeddedGlobal;
+    __bluemantleZoomEmbeddedPromise?: Promise<ZoomEmbeddedGlobal>;
+  }
+}
+
 type ZoomConnectionPayload = {
   state?: "Connected" | "Closed" | "Fail" | string;
   reason?: string;
@@ -50,6 +61,61 @@ const describeZoomError = (error: unknown) => {
   } catch {
     return "Zoom could not start. Please try again.";
   }
+};
+
+const ZOOM_SDK_VERSION = "3.13.2";
+const zoomCdnScripts = [
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/react.min.js`,
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/react-dom.min.js`,
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/redux.min.js`,
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/redux-thunk.min.js`,
+  `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/lodash.min.js`,
+  `https://source.zoom.us/zoom-meeting-embedded-${ZOOM_SDK_VERSION}.min.js`,
+];
+
+const loadScriptOnce = (src: string) => {
+  return new Promise<void>((resolve, reject) => {
+    const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    if (existingScript?.dataset.loaded === "true") {
+      resolve();
+      return;
+    }
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error(`Unable to load ${src}`)), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.crossOrigin = "anonymous";
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Unable to load ${src}`));
+    document.head.appendChild(script);
+  });
+};
+
+const loadZoomEmbeddedClient = async () => {
+  if (window.ZoomMtgEmbedded) return window.ZoomMtgEmbedded;
+
+  window.__bluemantleZoomEmbeddedPromise ??= (async () => {
+    for (const src of zoomCdnScripts) {
+      await loadScriptOnce(src);
+    }
+
+    if (!window.ZoomMtgEmbedded) {
+      throw new Error("Zoom embedded client did not initialize.");
+    }
+
+    return window.ZoomMtgEmbedded;
+  })();
+
+  return window.__bluemantleZoomEmbeddedPromise;
 };
 
 export default function ZoomMeetingSDK({
@@ -110,8 +176,8 @@ export default function ZoomMeetingSDK({
     setError("");
 
     try {
-      const [{ default: ZoomMtgEmbedded }, signatureRes] = await Promise.all([
-        import("@zoom/meetingsdk/embedded"),
+      const [ZoomMtgEmbedded, signatureRes] = await Promise.all([
+        loadZoomEmbeddedClient(),
         apiRequest("/zoom/generate-signature", {
           method: "POST",
           body: JSON.stringify({
