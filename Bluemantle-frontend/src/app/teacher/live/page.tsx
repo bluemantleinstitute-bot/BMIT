@@ -24,10 +24,32 @@ const getClassEndTime = (liveClass: LiveClass) => {
   return new Date(liveClass.date).getTime() + (Number(liveClass.duration) || 60) * 60000;
 };
 
+const getClassStartTime = (liveClass: LiveClass) => new Date(liveClass.date).getTime();
+
+const getClassWindowState = (liveClass: LiveClass | undefined, nowMs: number) => {
+  if (!liveClass) return "none";
+  if (liveClass.status === "live") return "live";
+
+  const startMs = getClassStartTime(liveClass);
+  const endMs = getClassEndTime(liveClass);
+
+  if (liveClass.status === "scheduled" && nowMs >= startMs && nowMs <= endMs) {
+    return "ready";
+  }
+
+  if (liveClass.status === "scheduled" && nowMs < startMs) {
+    return "upcoming";
+  }
+
+  return "finished";
+};
+
 export default function LiveClassControl() {
   const [sessionActive, setSessionActive] = useState(false);
   const [classes, setClasses] = useState<LiveClass[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [error, setError] = useState("");
 
   const [waitingStudents] = useState([
@@ -53,16 +75,48 @@ export default function LiveClassControl() {
     fetchClasses();
   }, []);
 
-  const upcomingClass = classes.find((c) => (
-    c.status === 'live' || (c.status === 'scheduled' && getClassEndTime(c) >= Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const liveClass = classes.find((c) => c.status === "live");
+  const currentScheduledClass = classes.find((c) => (
+    c.status === "scheduled" &&
+    getClassStartTime(c) <= nowMs &&
+    getClassEndTime(c) >= nowMs
   ));
+  const nextScheduledClass = classes.find((c) => (
+    c.status === "scheduled" && getClassStartTime(c) > nowMs
+  ));
+  const upcomingClass = liveClass || currentScheduledClass || nextScheduledClass;
+  const classWindowState = getClassWindowState(upcomingClass, nowMs);
+  const canEnterClass = classWindowState === "live" || classWindowState === "ready";
+  const statusLabel =
+    classWindowState === "live" ? "Live" :
+    classWindowState === "ready" ? "Ready Now" :
+    classWindowState === "upcoming" ? "Scheduled" :
+    sessionActive ? "Session Active" :
+    "Offline";
+  const buttonTitle =
+    classWindowState === "live" ? "Join Live Class" :
+    classWindowState === "ready" ? "Start Scheduled Class" :
+    classWindowState === "upcoming" ? "Not Time Yet" :
+    isLaunching ? "Launching..." :
+    "No Live Class";
 
   const handleLaunchSession = async () => {
     if (!upcomingClass) return;
+
+    if (!canEnterClass) {
+      alert("This class can be started only during its scheduled live time.");
+      return;
+    }
     
     try {
-      // If it's just scheduled, update it to live
-      if (upcomingClass.status === 'scheduled') {
+      setIsLaunching(true);
+
+      if (upcomingClass.status === "scheduled") {
         await apiRequest(`/classes/${upcomingClass._id}/status`, {
           method: "PUT",
           body: JSON.stringify({ status: "live" })
@@ -80,6 +134,8 @@ export default function LiveClassControl() {
     } catch (err) {
       console.error("Error launching session:", err);
       alert("Failed to start session.");
+    } finally {
+      setIsLaunching(false);
     }
   };
 
@@ -94,9 +150,9 @@ export default function LiveClassControl() {
            <div className="flex items-center gap-2 mb-2">
               <span className="text-[10px] font-bold text-outline uppercase tracking-widest border border-outline_variant/30 px-2 py-0.5 rounded">Protocol Ready</span>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
-                sessionActive ? 'bg-secondary text-on_secondary animate-pulse' : 'bg-error/10 text-error'
+                canEnterClass || sessionActive ? 'bg-secondary text-on_secondary animate-pulse' : 'bg-error/10 text-error'
               }`}>
-                {sessionActive ? 'Session Active' : 'Offline'}
+                {statusLabel}
               </span>
            </div>
           <h1 className="text-3xl font-manrope font-bold tracking-tight mb-1">
@@ -109,20 +165,20 @@ export default function LiveClassControl() {
           )}
           {upcomingClass && (
             <p className="text-on_surface_variant text-sm flex items-center gap-2">
-               <Video className="w-4 h-4 text-primary" /> Interactive Seminar • {formatDateTimeInIst(upcomingClass.date)} ({upcomingClass.duration}m)
+               <Video className="w-4 h-4 text-primary" /> Interactive Seminar - {formatDateTimeInIst(upcomingClass.date)} ({upcomingClass.duration}m)
             </p>
           )}
         </div>
         <div className="flex gap-4">
            <button 
              onClick={handleLaunchSession}
-             disabled={sessionActive || !upcomingClass}
-             className="relative overflow-hidden bg-primary text-on_primary px-10 py-4 rounded-2xl font-bold shadow-glow-primary flex items-center gap-3 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+             disabled={!canEnterClass || isLaunching}
+             className="group relative overflow-hidden bg-primary text-on_primary px-10 py-4 rounded-2xl font-bold shadow-glow-primary flex items-center gap-3 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
            >
               <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform" />
-              <Play className="w-5 h-5 fill-current" />
+              {isLaunching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />}
               <div className="text-left">
-                 <p className="text-sm font-black leading-none mb-1 uppercase tracking-tight">Ignite Session</p>
+                 <p className="text-sm font-black leading-none mb-1 uppercase tracking-tight">{buttonTitle}</p>
                  <p className="text-[9px] opacity-80 font-bold uppercase tracking-widest">Dual-Monitor Mode</p>
               </div>
            </button>
@@ -139,17 +195,21 @@ export default function LiveClassControl() {
                  <div className="w-24 h-24 rounded-full bg-surface_container_high/50 backdrop-blur-xl border border-white/10 flex items-center justify-center mb-6 shadow-ambient">
                     {sessionActive ? (
                       <Monitor className="w-10 h-10 text-primary animate-pulse" />
+                    ) : canEnterClass ? (
+                      <Video className="w-10 h-10 text-secondary animate-pulse" />
                     ) : (
                       <Camera className="w-10 h-10 text-outline" />
                     )}
                  </div>
                  <h3 className="text-2xl font-bold font-manrope text-on_surface mb-2">
-                    {sessionActive ? 'Platform Control Engaged' : 'Camera is currently inactive'}
+                    {sessionActive ? 'Platform Control Engaged' : canEnterClass ? 'Scheduled class is ready' : 'Camera is currently inactive'}
                  </h3>
                  <p className="text-sm text-on_surface_variant max-w-sm leading-relaxed">
                     {sessionActive 
                       ? 'The session has been handed over to the Mission Control dashboard. Please check your second monitor for audience analytics.' 
-                      : 'Class stream will begin once you click \'Ignite\'. The embedded classroom and Mission Control stay inside this platform.'}
+                      : canEnterClass
+                        ? 'Join the exact scheduled live room from here. The embedded classroom and Mission Control stay inside this platform.'
+                        : 'Class stream becomes available at the scheduled IST time. The embedded classroom and Mission Control stay inside this platform.'}
                  </p>
               </div>
               
