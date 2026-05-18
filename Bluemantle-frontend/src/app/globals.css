@@ -262,3 +262,35 @@ a[href*="unicorn.studio"] {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+body.bluemantle-zoom-active {
+  overflow: hidden !important;
+}
+
+.bluemantle-zoom-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  isolation: isolate;
+  background: #000 !important;
+}
+
+.bluemantle-zoom-stage #zmmtg-root,
+.bluemantle-zoom-stage #zmmtg-root .meeting-app,
+.bluemantle-zoom-stage #zmmtg-root .meeting-client,
+.bluemantle-zoom-stage #zmmtg-root .main-layout {
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  z-index: 2 !important;
+}
+
+.bluemantle-zoom-stage #zmmtg-root {
+  background: #000 !important;
+  overflow: hidden !important;
+}

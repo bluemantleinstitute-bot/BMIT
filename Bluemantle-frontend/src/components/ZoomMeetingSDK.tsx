@@ -83,7 +83,6 @@ const zoomCdnScripts = [
 ];
 
 const ZOOM_READY_SELECTORS = [
-  "#zmmtg-root",
   ".meeting-app",
   ".meeting-client",
   ".main-layout",
@@ -179,12 +178,50 @@ export default function ZoomMeetingSDK({
   const cleanedMeetingNumber = useMemo(() => String(meetingNumber || "").replace(/\D/g, ""), [meetingNumber]);
   const displayName = useMemo(() => (userName || (isHost ? "Faculty" : "Student")).trim(), [isHost, userName]);
 
+  const applyZoomStageLayout = useCallback(() => {
+    const stage = zoomRootRef.current;
+    if (!stage) return null;
+
+    let zoomRoot = document.getElementById("zmmtg-root");
+    if (!zoomRoot) {
+      zoomRoot = document.createElement("div");
+      zoomRoot.id = "zmmtg-root";
+    }
+
+    if (zoomRoot.parentElement !== stage) {
+      stage.appendChild(zoomRoot);
+    }
+
+    document.body.classList.add("bluemantle-zoom-active");
+    document.body.classList.toggle("bluemantle-zoom-host", isHost);
+    document.body.classList.toggle("bluemantle-zoom-student", !isHost);
+    stage.classList.add("bluemantle-zoom-stage");
+
+    Object.assign(zoomRoot.style, {
+      display: "block",
+      position: "absolute",
+      inset: "0",
+      width: "100%",
+      height: "100%",
+      minWidth: "100%",
+      minHeight: "100%",
+      zIndex: "2",
+      background: "#000",
+      overflow: "hidden",
+    });
+
+    return zoomRoot;
+  }, [isHost]);
+
   const updateStatus = useCallback((nextStatus: typeof status) => {
     statusRef.current = nextStatus;
     setStatus(nextStatus);
   }, []);
 
   const hasRenderedZoomUi = useCallback(() => {
+    const zoomRoot = applyZoomStageLayout();
+    if (zoomRoot?.children.length) return true;
+
     return ZOOM_READY_SELECTORS.some((selector) => {
       const element = document.querySelector<HTMLElement>(selector);
       if (!element) return false;
@@ -192,7 +229,7 @@ export default function ZoomMeetingSDK({
       const box = element.getBoundingClientRect();
       return box.width > 120 && box.height > 120;
     });
-  }, []);
+  }, [applyZoomStageLayout]);
 
   const markConnectedWhenZoomRenders = useCallback(() => {
     if (!mountedRef.current || statusRef.current !== "joining") return;
@@ -233,6 +270,7 @@ export default function ZoomMeetingSDK({
 
     updateStatus("joining");
     setError("");
+    applyZoomStageLayout();
     if (joinFallbackTimerRef.current) {
       window.clearTimeout(joinFallbackTimerRef.current);
       joinFallbackTimerRef.current = null;
@@ -278,8 +316,14 @@ export default function ZoomMeetingSDK({
 
         joinFallbackTimerRef.current = window.setTimeout(() => {
           if (!mountedRef.current || statusRef.current !== "joining") return;
-          updateStatus("connected");
-        }, 9000);
+          if (hasRenderedZoomUi()) {
+            updateStatus("connected");
+            return;
+          }
+
+          updateStatus("error");
+          setError("Zoom connected, but the classroom view did not mount on screen. Please retry the embedded room.");
+        }, 18000);
       };
 
       ZoomMtg.init({
@@ -299,15 +343,19 @@ export default function ZoomMeetingSDK({
       updateStatus("error");
       setError(describeZoomError(err));
     }
-  }, [classId, cleanedMeetingNumber, displayName, isHost, leaveUrl, markConnectedWhenZoomRenders, password, updateStatus, userEmail]);
+  }, [applyZoomStageLayout, classId, cleanedMeetingNumber, displayName, hasRenderedZoomUi, isHost, leaveUrl, password, updateStatus, userEmail]);
 
   useEffect(() => {
     mountedRef.current = true;
+    applyZoomStageLayout();
     startEmbeddedMeeting();
 
     const fullscreenHandler = () => setIsFullscreen(Boolean(document.fullscreenElement));
     const zoomRenderObserver = new MutationObserver(markConnectedWhenZoomRenders);
-    const zoomRenderPoller = window.setInterval(markConnectedWhenZoomRenders, 750);
+    const zoomRenderPoller = window.setInterval(() => {
+      applyZoomStageLayout();
+      markConnectedWhenZoomRenders();
+    }, 500);
 
     document.addEventListener("fullscreenchange", fullscreenHandler);
     zoomRenderObserver.observe(document.body, { childList: true, subtree: true });
@@ -321,14 +369,15 @@ export default function ZoomMeetingSDK({
         window.clearTimeout(joinFallbackTimerRef.current);
         joinFallbackTimerRef.current = null;
       }
+      document.body.classList.remove("bluemantle-zoom-active", "bluemantle-zoom-host", "bluemantle-zoom-student");
       window.ZoomMtg?.leaveMeeting?.({});
     };
-  }, [markConnectedWhenZoomRenders, startEmbeddedMeeting]);
+  }, [applyZoomStageLayout, markConnectedWhenZoomRenders, startEmbeddedMeeting]);
 
   const busy = status === "booting" || status === "joining";
 
   return (
-    <div className="min-h-screen bg-[#071019] text-white">
+    <div className="fixed inset-0 z-[10000] bg-[#071019] text-white">
       <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#08131f]/95 px-4 py-3 backdrop-blur md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <button
@@ -373,8 +422,8 @@ export default function ZoomMeetingSDK({
         </div>
       </header>
 
-      <main className="grid min-h-[calc(100vh-4rem)] grid-rows-[1fr_auto]">
-        <section className="relative min-h-[560px] overflow-hidden bg-black">
+      <main className="grid h-[calc(100vh-4rem)] grid-rows-[1fr_auto]">
+        <section className="relative min-h-0 overflow-hidden bg-black">
           <div ref={zoomRootRef} className="absolute inset-0 h-full w-full bg-black" />
 
           {busy && (
