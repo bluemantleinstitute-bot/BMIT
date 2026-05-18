@@ -19,7 +19,16 @@ export function proxy(request: NextRequest) {
   const token = request.cookies.get("token")?.value;
   const role = request.cookies.get("user_role")?.value;
   const { pathname } = request.nextUrl;
+  const isSwitchAccount = pathname === "/" && request.nextUrl.searchParams.get("switch") === "1";
   const matchedRoute = protectedRoutes.find((route) => pathname.startsWith(route.prefix));
+
+  if (isSwitchAccount) {
+    const response = NextResponse.next();
+    response.cookies.delete("token");
+    response.cookies.delete("user_role");
+    response.cookies.delete("user_name");
+    return response;
+  }
 
   if (matchedRoute && !token) {
     const url = request.nextUrl.clone();

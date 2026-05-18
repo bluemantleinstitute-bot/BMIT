@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { KnowledgeCard, CardHeader, CardBody } from "@/components/KnowledgeCard";
 import { cn } from "@/lib/utils";
 import { ShieldAlert } from "lucide-react";
-import { apiRequest, persistBrowserAuthSession } from "@/lib/api";
+import { apiRequest, clearBrowserAuthSession, persistBrowserAuthSession } from "@/lib/api";
 
 type LoginResponse = {
   success?: boolean;
@@ -87,6 +87,13 @@ export default function LoginPage() {
   };
 
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("switch") === "1") {
+      clearBrowserAuthSession();
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#071019] text-white relative overflow-hidden">
