@@ -82,6 +82,17 @@ const zoomCdnScripts = [
   `https://source.zoom.us/zoom-meeting-${ZOOM_SDK_VERSION}.min.js`,
 ];
 
+const ZOOM_READY_SELECTORS = [
+  "#zmmtg-root",
+  ".meeting-app",
+  ".meeting-client",
+  ".main-layout",
+  ".video-share-layout",
+  ".gallery-video-container",
+  ".participants-section-container",
+  ".join-dialog",
+];
+
 const loadStyleOnce = (href: string) => {
   if (document.querySelector(`link[href="${href}"]`)) return;
 
@@ -158,6 +169,8 @@ export default function ZoomMeetingSDK({
   const zoomRootRef = useRef<HTMLDivElement | null>(null);
   const clientRef = useRef<ZoomClient | null>(null);
   const mountedRef = useRef(true);
+  const statusRef = useRef<"booting" | "joining" | "connected" | "closed" | "error">("booting");
+  const joinFallbackTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<"booting" | "joining" | "connected" | "closed" | "error">("booting");
   const [error, setError] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -165,6 +178,26 @@ export default function ZoomMeetingSDK({
   const isHost = role === 1;
   const cleanedMeetingNumber = useMemo(() => String(meetingNumber || "").replace(/\D/g, ""), [meetingNumber]);
   const displayName = useMemo(() => (userName || (isHost ? "Faculty" : "Student")).trim(), [isHost, userName]);
+
+  const updateStatus = useCallback((nextStatus: typeof status) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
+
+  const hasRenderedZoomUi = useCallback(() => {
+    return ZOOM_READY_SELECTORS.some((selector) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) return false;
+
+      const box = element.getBoundingClientRect();
+      return box.width > 120 && box.height > 120;
+    });
+  }, []);
+
+  const markConnectedWhenZoomRenders = useCallback(() => {
+    if (!mountedRef.current || statusRef.current !== "joining") return;
+    if (hasRenderedZoomUi()) updateStatus("connected");
+  }, [hasRenderedZoomUi, updateStatus]);
 
   const leaveRoom = useCallback(async () => {
     try {
@@ -193,13 +226,17 @@ export default function ZoomMeetingSDK({
 
   const startEmbeddedMeeting = useCallback(async () => {
     if (!classId || !cleanedMeetingNumber || !zoomRootRef.current) {
-      setStatus("error");
+      updateStatus("error");
       setError("This class is missing Zoom meeting data. Please recreate the session or contact admin.");
       return;
     }
 
-    setStatus("joining");
+    updateStatus("joining");
     setError("");
+    if (joinFallbackTimerRef.current) {
+      window.clearTimeout(joinFallbackTimerRef.current);
+      joinFallbackTimerRef.current = null;
+    }
 
     try {
       const [ZoomMtg, signatureRes] = await Promise.all([
@@ -230,14 +267,19 @@ export default function ZoomMeetingSDK({
           tk: "",
           zak: isHost ? signatureRes.zak || "" : "",
           success: () => {
-            if (mountedRef.current) setStatus("connected");
+            if (mountedRef.current) updateStatus("connected");
           },
           error: (joinError: unknown) => {
             if (!mountedRef.current) return;
-            setStatus("error");
+            updateStatus("error");
             setError(describeZoomError(joinError));
           },
         });
+
+        joinFallbackTimerRef.current = window.setTimeout(() => {
+          if (!mountedRef.current || statusRef.current !== "joining") return;
+          updateStatus("connected");
+        }, 9000);
       };
 
       ZoomMtg.init({
@@ -247,31 +289,41 @@ export default function ZoomMeetingSDK({
         success: joinMeeting,
         error: (initError: unknown) => {
           if (!mountedRef.current) return;
-          setStatus("error");
+          updateStatus("error");
           setError(describeZoomError(initError));
         },
       });
     } catch (err) {
       console.error("Embedded Zoom failed:", err);
       if (!mountedRef.current) return;
-      setStatus("error");
+      updateStatus("error");
       setError(describeZoomError(err));
     }
-  }, [classId, cleanedMeetingNumber, displayName, isHost, leaveUrl, password, userEmail]);
+  }, [classId, cleanedMeetingNumber, displayName, isHost, leaveUrl, markConnectedWhenZoomRenders, password, updateStatus, userEmail]);
 
   useEffect(() => {
     mountedRef.current = true;
     startEmbeddedMeeting();
 
     const fullscreenHandler = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    const zoomRenderObserver = new MutationObserver(markConnectedWhenZoomRenders);
+    const zoomRenderPoller = window.setInterval(markConnectedWhenZoomRenders, 750);
+
     document.addEventListener("fullscreenchange", fullscreenHandler);
+    zoomRenderObserver.observe(document.body, { childList: true, subtree: true });
 
     return () => {
       mountedRef.current = false;
       document.removeEventListener("fullscreenchange", fullscreenHandler);
+      zoomRenderObserver.disconnect();
+      window.clearInterval(zoomRenderPoller);
+      if (joinFallbackTimerRef.current) {
+        window.clearTimeout(joinFallbackTimerRef.current);
+        joinFallbackTimerRef.current = null;
+      }
       window.ZoomMtg?.leaveMeeting?.({});
     };
-  }, [startEmbeddedMeeting]);
+  }, [markConnectedWhenZoomRenders, startEmbeddedMeeting]);
 
   const busy = status === "booting" || status === "joining";
 
