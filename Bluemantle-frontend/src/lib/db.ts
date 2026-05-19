@@ -162,14 +162,14 @@ export const db = {
       return response.data;
     },
     submitDoubt: async (doubtData: any) => {
-      const response = await apiRequest("/doubts", {
+      const response = await apiRequest("/doubts/submit", {
         method: "POST",
         body: JSON.stringify(doubtData),
       });
       return response.data;
     },
     getMyDoubts: async () => {
-      const response = await apiRequest("/doubts/my");
+      const response = await apiRequest("/doubts/my-doubts");
       return response.data;
     },
     getAllDoubts: async () => {
