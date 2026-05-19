@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { SwitchButton3D } from "@/components/SwitchButton3D";
-import { Users, UserPlus, Search, Filter, MoreVertical, BadgeCheck, X, Activity, AlertTriangle } from "lucide-react";
+import { Users, UserPlus, Search, Filter, MoreVertical, BadgeCheck, X, Activity, AlertTriangle, Trash2 } from "lucide-react";
 import { PremiumSearch } from "@/components/PremiumSearch";
 import { db } from "@/lib/db";
 import { useEffect } from "react";
@@ -26,6 +26,7 @@ export default function StudentManagement() {
 
   const [suspendConfirmStep, setSuspendConfirmStep] = useState(0); // 0=closed, 1=first, 2=second
   const [studentToSuspend, setStudentToSuspend] = useState<any>(null);
+  const [studentToDelete, setStudentToDelete] = useState<any>(null);
 
   // Master Batch List
   // const [batches] = useState([...]); // Removed static batches
@@ -42,24 +43,24 @@ export default function StudentManagement() {
   // const [newStudent, setNewStudent] = useState({ name: "", email: "", cohort: "", status: "Active" });
 
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [studentsData, batchesData] = await Promise.all([
+        db.user.getUsers("student"),
+        db.user.getBatches()
+      ]);
+      setStudents(studentsData);
+      setBatches(batchesData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [studentsData, batchesData] = await Promise.all([
-          db.user.getUsers("student"),
-          db.user.getBatches()
-        ]);
-        setStudents(studentsData);
-        setBatches(batchesData);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, []);
 
@@ -183,6 +184,22 @@ export default function StudentManagement() {
     }
   };
 
+  const handleDeleteStudent = async () => {
+    if (!studentToDelete) return;
+    try {
+      setSaving(true);
+      await db.user.deleteUser(studentToDelete.id);
+      setStudentToDelete(null);
+      await fetchData();
+      alert("Student deleted successfully");
+    } catch (error: any) {
+      console.error("Failed to delete student:", error);
+      alert(error.message || "Error deleting student");
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const columns = [
     {
@@ -262,6 +279,12 @@ export default function StudentManagement() {
               className="w-full text-left px-4 py-3 text-sm text-error hover:bg-error/10 transition-colors font-semibold border-t border-outline_variant/20"
             >
               {row.status === 'suspended' ? 'Reactivate Account' : 'Suspend Account'}
+            </button>
+            <button
+              onClick={() => setStudentToDelete(row)}
+              className="w-full text-left px-4 py-3 text-sm text-error hover:bg-error/10 transition-colors font-semibold border-t border-outline_variant/20 flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Delete Student
             </button>
 
           </div>
@@ -587,6 +610,38 @@ export default function StudentManagement() {
                   className="flex-1 px-4 py-2.5 rounded-full font-bold text-sm bg-error text-white hover:bg-error/90 disabled:opacity-50 transition-colors"
                 >
                   {saving ? 'Processing...' : (studentToSuspend.status === 'suspended' ? 'Reactivate' : 'Suspend')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-surface_container_lowest w-full max-w-sm rounded-2xl shadow-ambient border border-error/20 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-14 h-14 bg-error/10 text-error rounded-full flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-on_surface mb-2 font-manrope">Delete Student?</h2>
+              <p className="text-sm text-on_surface_variant mb-2">
+                This permanently removes the student account, batch membership, attendance, progress, doubts, and device lock.
+              </p>
+              <p className="font-bold text-on_surface text-lg mb-6">{studentToDelete.name}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStudentToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-full font-bold text-sm text-on_surface_variant hover:bg-surface_container_high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteStudent}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 rounded-full font-bold text-sm bg-error text-white hover:bg-error/90 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
             </div>

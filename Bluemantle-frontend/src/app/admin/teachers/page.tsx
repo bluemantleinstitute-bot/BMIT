@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { SwitchButton3D } from "@/components/SwitchButton3D";
-import { GraduationCap, UserPlus, Search, Filter, BookOpen, Activity, X, Copy, Key, BadgeCheck } from "lucide-react";
+import { GraduationCap, UserPlus, Search, Filter, BookOpen, Activity, X, Copy, Key, BadgeCheck, Trash2, AlertTriangle } from "lucide-react";
 import { db } from "@/lib/db";
 
 export default function TeacherManagement() {
@@ -15,21 +15,23 @@ export default function TeacherManagement() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<any>(null);
+  const [teacherToDelete, setTeacherToDelete] = useState<any>(null);
 
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "", title: "", password: "" });
 
+  const fetchTeachers = async () => {
+    try {
+      setLoading(true);
+      const data = await db.user.getUsers("teacher");
+      setTeachers(data || []);
+    } catch (error) {
+      console.error("Failed to fetch teachers:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTeachers = async () => {
-      try {
-        setLoading(true);
-        const data = await db.user.getUsers("teacher");
-        setTeachers(data || []);
-      } catch (error) {
-        console.error("Failed to fetch teachers:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchTeachers();
   }, []);
 
@@ -80,6 +82,22 @@ export default function TeacherManagement() {
     } catch (error) {
       console.error("Failed to recruit faculty:", error);
       alert("Error recruiting faculty");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTeacher = async () => {
+    if (!teacherToDelete) return;
+    try {
+      setSaving(true);
+      await db.user.deleteUser(teacherToDelete.id);
+      setTeacherToDelete(null);
+      await fetchTeachers();
+      alert("Teacher deleted successfully");
+    } catch (error: any) {
+      console.error("Failed to delete teacher:", error);
+      alert(error.message || "Error deleting teacher");
     } finally {
       setSaving(false);
     }
@@ -156,6 +174,12 @@ export default function TeacherManagement() {
               className="w-full text-left px-4 py-3 text-sm text-on_surface hover:bg-surface_container_high transition-colors font-semibold"
             >
               Copy Credentials
+            </button>
+            <button
+              onClick={() => setTeacherToDelete(row)}
+              className="w-full text-left px-4 py-3 text-sm text-error hover:bg-error/10 transition-colors font-semibold border-t border-outline_variant/20 flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Delete Teacher
             </button>
           </div>
         </div>
@@ -390,6 +414,38 @@ export default function TeacherManagement() {
               >
                 Done & Continue
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {teacherToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-surface_container_lowest w-full max-w-sm rounded-2xl shadow-ambient border border-error/20 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-14 h-14 bg-error/10 text-error rounded-full flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-on_surface mb-2 font-manrope">Delete Teacher?</h2>
+              <p className="text-sm text-on_surface_variant mb-2">
+                This permanently removes the teacher account and clears batch assignment links.
+              </p>
+              <p className="font-bold text-on_surface text-lg mb-6">{teacherToDelete.name}</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTeacherToDelete(null)}
+                  className="flex-1 px-4 py-2.5 rounded-full font-bold text-sm text-on_surface_variant hover:bg-surface_container_high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteTeacher}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2.5 rounded-full font-bold text-sm bg-error text-white hover:bg-error/90 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? "Deleting..." : "Delete"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

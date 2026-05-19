@@ -400,6 +400,12 @@ export const db = {
       });
       return response;
     },
+    deleteUser: async (userId: string) => {
+      const response = await apiRequest(`/users/${userId}`, {
+        method: "DELETE"
+      });
+      return response;
+    },
 
     updateProgress: async (payload: { courseId: string, moduleId: string, chapterId: string, isCompleted?: boolean }) => {
       const response = await apiRequest("/institutional", {
