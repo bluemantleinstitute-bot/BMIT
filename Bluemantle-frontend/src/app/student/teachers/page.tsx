@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 
 function resolveMediaUrl(url?: string) {
   if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
   if (url.startsWith("http")) return url;
   return `${API_ORIGIN}${url}`;
 }
@@ -68,19 +69,11 @@ export default function StudentTeachersPage() {
         </div>
       ) : (
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredTeachers.map((teacher) => {
-            const imageUrl = resolveMediaUrl(teacher.profilePicture);
-            return (
-              <KnowledgeCard key={teacher._id} className="overflow-hidden">
-                <CardBody className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-surface_container_high flex items-center justify-center">
-                      {imageUrl ? (
-                        <img src={imageUrl} alt={teacher.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <UserCircle className="h-12 w-12 text-outline" />
-                      )}
-                    </div>
+          {filteredTeachers.map((teacher) => (
+            <KnowledgeCard key={teacher._id} className="overflow-hidden">
+              <CardBody className="p-6">
+                <div className="flex items-start gap-4">
+                    <TeacherAvatar name={teacher.name} src={teacher.profilePicture} />
                     <div className="min-w-0">
                       <h2 className="font-manrope text-lg font-bold text-on_surface">{teacher.name}</h2>
                       <p className="text-sm font-semibold text-primary">{teacher.title || "Faculty"}</p>
@@ -110,9 +103,23 @@ export default function StudentTeachersPage() {
                   </div>
                 </CardBody>
               </KnowledgeCard>
-            );
-          })}
+          ))}
         </section>
+      )}
+    </div>
+  );
+}
+
+function TeacherAvatar({ name, src }: { name?: string; src?: string }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl = resolveMediaUrl(src);
+
+  return (
+    <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-surface_container_high flex items-center justify-center">
+      {imageUrl && !failed ? (
+        <img src={imageUrl} alt={name || "Teacher"} className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <UserCircle className="h-12 w-12 text-outline" />
       )}
     </div>
   );

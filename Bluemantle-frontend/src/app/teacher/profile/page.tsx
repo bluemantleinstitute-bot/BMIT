@@ -28,8 +28,20 @@ const emptyProfile: TeacherProfile = {
 
 function resolveMediaUrl(url?: string) {
   if (!url) return "";
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
   if (url.startsWith("http")) return url;
   return `${API_ORIGIN}${url}`;
+}
+
+const MAX_PROFILE_IMAGE_BYTES = 1.5 * 1024 * 1024;
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read profile image"));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function TeacherProfilePage() {
@@ -37,6 +49,7 @@ export default function TeacherProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const imageUrl = useMemo(() => resolveMediaUrl(profile.profilePicture), [profile.profilePicture]);
 
@@ -55,17 +68,22 @@ export default function TeacherProfilePage() {
   }, []);
 
   const updateField = (field: keyof TeacherProfile, value: string) => {
+    if (field === "profilePicture") setImageFailed(false);
     setProfile((current) => ({ ...current, [field]: value }));
   };
 
   const handleImageUpload = async (file?: File) => {
     if (!file) return;
+    if (file.size > MAX_PROFILE_IMAGE_BYTES) {
+      alert("Please choose an image below 1.5 MB.");
+      return;
+    }
     try {
       setUploading(true);
-      const uploaded = await db.user.uploadFile(file);
-      updateField("profilePicture", uploaded.url || "");
+      const dataUrl = await fileToDataUrl(file);
+      updateField("profilePicture", dataUrl);
     } catch (error: any) {
-      alert(error.message || "Profile image upload failed");
+      alert(error.message || "Profile image could not be loaded");
     } finally {
       setUploading(false);
     }
@@ -110,8 +128,8 @@ export default function TeacherProfilePage() {
         <KnowledgeCard>
           <CardBody className="p-8 text-center">
             <div className="mx-auto mb-5 h-36 w-36 overflow-hidden rounded-full border border-primary/30 bg-surface_container_high flex items-center justify-center">
-              {imageUrl ? (
-                <img src={imageUrl} alt={profile.name || "Teacher"} className="h-full w-full object-cover" />
+              {imageUrl && !imageFailed ? (
+                <img src={imageUrl} alt={profile.name || "Teacher"} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
               ) : (
                 <UserCircle className="h-20 w-20 text-outline" />
               )}

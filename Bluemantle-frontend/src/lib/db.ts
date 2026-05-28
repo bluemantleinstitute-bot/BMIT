@@ -435,6 +435,19 @@ export const db = {
       });
       return response;
     },
+    updateUserProfileByAdmin: async (userId: string, payload: any) => {
+      const response = await apiRequest(`/users/${userId}/profile`, {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      });
+      return response;
+    },
+    clearUserSessions: async (userId: string) => {
+      const response = await apiRequest(`/users/${userId}/clear-sessions`, {
+        method: "POST"
+      });
+      return response;
+    },
     deleteUser: async (userId: string) => {
       const response = await apiRequest(`/users/${userId}`, {
         method: "DELETE"
