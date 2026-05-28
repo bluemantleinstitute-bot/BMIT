@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { logoutBrowserSession } from "@/lib/api";
 import { 
   LayoutDashboard, Video, PlayCircle, Calendar, FileText, ClipboardCheck, 
   Target, BellRing, Users, BookOpen, DollarSign, Smartphone, 
@@ -22,6 +23,7 @@ export const STUDENT_NAV_ITEMS = [
   { name: "Reminders", href: "/student/reminders", icon: BellRing },
   { name: "Doubts", href: "/student/qa", icon: MessageSquare },
   { name: "Complaint Box", href: "/student/complaints", icon: LifeBuoy },
+  { name: "Teachers", href: "/student/teachers", icon: GraduationCap },
 ];
 
 export const PROFILE_MENU_ITEMS = [
@@ -52,6 +54,7 @@ export const TEACHER_NAV_ITEMS = [
   { name: "Students", href: "/teacher/students", icon: Users },
   { name: "Materials", href: "/teacher/materials", icon: UploadCloud },
   { name: "Doubts Inbox", href: "/teacher/qa", icon: MessageSquare },
+  { name: "Profile", href: "/teacher/profile", icon: UserCircle },
 ];
 
 export const OWNER_NAV_ITEMS = [
@@ -64,6 +67,7 @@ export type UserRole = "student" | "admin" | "teacher" | "owner";
 
 export function SidebarNavigation({ role = "student" }: { role?: UserRole }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [userName, setUserName] = useState("User");
 
   useEffect(() => {
@@ -81,6 +85,12 @@ export function SidebarNavigation({ role = "student" }: { role?: UserRole }) {
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const handleLogout = async () => {
+    await logoutBrowserSession();
+    router.replace("/");
+    router.refresh();
   };
 
   let items = STUDENT_NAV_ITEMS;
@@ -152,19 +162,14 @@ export function SidebarNavigation({ role = "student" }: { role?: UserRole }) {
                     {item.name}
                   </Link>
                 ))}
-                <Link
-                  href="/"
-                  onClick={() => {
-                    // Clear cookies on logout
-                    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                    document.cookie = "user_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                    document.cookie = "user_name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                  }}
+                <button
+                  type="button"
+                  onClick={handleLogout}
                   className="flex items-center gap-3 px-4 py-2 text-sm text-error hover:bg-error/10 transition-colors mt-2 border-t border-outline_variant/20 pt-2"
                 >
                   <UserCircle className="w-4 h-4" />
                   Sign Out
-                </Link>
+                </button>
               </div>
              </div>
           </div>

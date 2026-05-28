@@ -45,6 +45,7 @@ export default function LoginPage() {
     setError("");
 
     try {
+      clearBrowserAuthSession();
       const data: LoginResponse = await apiRequest("/auth/login", {
         method: "POST",
         body: JSON.stringify({ userId: email, password }),

@@ -1,4 +1,5 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
 
 const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60;
 
@@ -40,8 +41,19 @@ export function clearBrowserAuthSession() {
 
   ["token", "user_role", "user_name"].forEach((name) => {
     document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secureCookieAttribute()}`;
+    document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=None${secureCookieAttribute()}`;
   });
   localStorage.removeItem("bluemantle_session");
+}
+
+export async function logoutBrowserSession() {
+  try {
+    await apiRequest("/auth/logout", { method: "POST" });
+  } catch (_) {
+    // Local cleanup still runs even if the network request is blocked.
+  } finally {
+    clearBrowserAuthSession();
+  }
 }
 
 export function persistBrowserAuthSession(data: AuthSessionResponse) {

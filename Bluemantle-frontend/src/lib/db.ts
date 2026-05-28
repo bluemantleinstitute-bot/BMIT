@@ -1,4 +1,4 @@
-import { apiRequest } from "./api";
+import { API_BASE_URL, apiRequest, getBrowserCookie } from "./api";
 import { formatDateInIst, formatDateTimeInIst, formatTimeInIst } from "./ist-time";
 
 const getClassEndTime = (liveClass: any) => {
@@ -241,6 +241,41 @@ export const db = {
     getTeachers: async () => {
       const response = await apiRequest("/users/teachers");
       return response.data;
+    },
+    getTeacherProfiles: async () => {
+      const response = await apiRequest("/teacher/profiles");
+      return response.data;
+    },
+    getMyTeacherProfile: async () => {
+      const response = await apiRequest("/teacher/profile");
+      return response.data;
+    },
+    updateTeacherProfile: async (payload: any) => {
+      const response = await apiRequest("/teacher/profile", {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      return response;
+    },
+    clearOtherTeacherSessions: async () => {
+      const response = await apiRequest("/teacher/sessions/clear-others", {
+        method: "POST"
+      });
+      return response;
+    },
+    uploadFile: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const token = getBrowserCookie("token");
+      const response = await fetch(`${API_BASE_URL}/upload`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Upload failed");
+      return data;
     },
     // Live Class Management
     getTeacherClasses: async () => {
