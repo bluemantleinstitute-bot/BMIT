@@ -1,5 +1,11 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+export const API_ORIGIN = (() => {
+  try {
+    return new URL(API_BASE_URL).origin;
+  } catch {
+    return API_BASE_URL.replace(/\/api\/?$/, "");
+  }
+})();
 
 const AUTH_COOKIE_MAX_AGE = 24 * 60 * 60;
 

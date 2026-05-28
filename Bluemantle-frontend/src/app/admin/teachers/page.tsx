@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import { KnowledgeCard, CardHeader, CardTitle, CardBody } from "@/components/KnowledgeCard";
 import { DataTable } from "@/components/DataTable";
 import { SwitchButton3D } from "@/components/SwitchButton3D";
-import { GraduationCap, UserPlus, Search, Filter, BookOpen, Activity, X, Copy, Key, BadgeCheck, Trash2, AlertTriangle } from "lucide-react";
+import { GraduationCap, UserPlus, Search, Filter, BookOpen, Activity, X, Copy, Key, BadgeCheck, Trash2, AlertTriangle, Mail, Phone, Link, UserCircle, Eye } from "lucide-react";
+import { API_ORIGIN } from "@/lib/api";
 import { db } from "@/lib/db";
 
 export default function TeacherManagement() {
@@ -16,6 +17,7 @@ export default function TeacherManagement() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<any>(null);
   const [teacherToDelete, setTeacherToDelete] = useState<any>(null);
+  const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
 
   const [newFaculty, setNewFaculty] = useState({ name: "", email: "", title: "", password: "" });
 
@@ -24,6 +26,7 @@ export default function TeacherManagement() {
       setLoading(true);
       const data = await db.user.getUsers("teacher");
       setTeachers(data || []);
+      setSelectedTeacher((current: any) => current || data?.[0] || null);
     } catch (error) {
       console.error("Failed to fetch teachers:", error);
     } finally {
@@ -42,6 +45,14 @@ export default function TeacherManagement() {
       t.title?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [teachers, searchQuery]);
+
+  const activeProfile = selectedTeacher || filteredTeachers[0] || null;
+
+  const resolveMediaUrl = (url?: string) => {
+    if (!url) return "";
+    if (url.startsWith("http")) return url;
+    return `${API_ORIGIN}${url}`;
+  };
 
   const generatePassword = () => {
     const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -110,7 +121,11 @@ export default function TeacherManagement() {
       render: (val: string, row: any) => (
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-signature-gradient text-on_primary flex items-center justify-center font-bold text-sm shadow-sm">
-            {val?.split(" ").map((n: string) => n[0]).join("").substring(0, 2)}
+            {row.profilePicture ? (
+              <img src={resolveMediaUrl(row.profilePicture)} alt={val} className="h-full w-full rounded-xl object-cover" />
+            ) : (
+              val?.split(" ").map((n: string) => n[0]).join("").substring(0, 2)
+            )}
           </div>
           <div>
             <p className="font-bold text-on_surface">{val}</p>
@@ -167,11 +182,17 @@ export default function TeacherManagement() {
           </button>
           <div className="absolute right-0 top-8 w-44 bg-surface_container_lowest border border-outline_variant/30 rounded-xl shadow-ambient opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden">
             <button
+              onClick={() => setSelectedTeacher(row)}
+              className="w-full text-left px-4 py-3 text-sm text-on_surface hover:bg-surface_container_high transition-colors font-semibold flex items-center gap-2"
+            >
+              <Eye className="w-4 h-4" /> View Profile
+            </button>
+            <button
               onClick={() => {
                 navigator.clipboard.writeText(`User ID: ${row.userId}\nPassword: ${row.password}`);
                 alert("Credentials copied!");
               }}
-              className="w-full text-left px-4 py-3 text-sm text-on_surface hover:bg-surface_container_high transition-colors font-semibold"
+              className="w-full text-left px-4 py-3 text-sm text-on_surface hover:bg-surface_container_high transition-colors font-semibold border-t border-outline_variant/20"
             >
               Copy Credentials
             </button>
@@ -266,31 +287,45 @@ export default function TeacherManagement() {
           </KnowledgeCard>
         </div>
 
-        {/* Access Control Info */}
+        {/* Teacher Profile Preview */}
         <div className="space-y-6">
           <KnowledgeCard className="bg-surface_container_low border-primary/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BadgeCheck className="w-5 h-5 text-primary" /> Role Access
+                <BadgeCheck className="w-5 h-5 text-primary" /> Teacher Profile
               </CardTitle>
             </CardHeader>
             <CardBody className="space-y-6">
-              <div className="space-y-2">
-                <h4 className="font-bold text-sm text-on_surface flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Standard Faculty
-                </h4>
-                <p className="text-xs text-on_surface_variant leading-relaxed pl-3.5">
-                  Classroom management, grading, and student communications.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <h4 className="font-bold text-sm text-on_surface flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-secondary" /> Department Head
-                </h4>
-                <p className="text-xs text-on_surface_variant leading-relaxed pl-3.5">
-                  Curriculum oversight and department performance analytics.
-                </p>
-              </div>
+              {activeProfile ? (
+                <>
+                  <div className="flex items-start gap-4">
+                    <div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-2xl bg-surface_container_high flex items-center justify-center">
+                      {activeProfile.profilePicture ? (
+                        <img src={resolveMediaUrl(activeProfile.profilePicture)} alt={activeProfile.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <UserCircle className="h-12 w-12 text-outline" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-manrope text-lg font-bold text-on_surface">{activeProfile.name}</h3>
+                      <p className="text-sm font-semibold text-primary">{activeProfile.title || "Faculty"}</p>
+                      <p className="text-[10px] text-outline uppercase tracking-wider">{activeProfile.userId}</p>
+                    </div>
+                  </div>
+
+                  <p className="rounded-2xl bg-surface_container_highest/40 p-4 text-sm leading-6 text-on_surface_variant">
+                    {activeProfile.description || "No description added yet."}
+                  </p>
+
+                  <div className="space-y-3">
+                    <ContactRow icon={Mail} text={activeProfile.email || "Email not added"} />
+                    <ContactRow icon={Link} text={activeProfile.linkedin || "LinkedIn not added"} />
+                    <ContactRow icon={Phone} text={activeProfile.mobileNumber || "Mobile not added"} />
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-on_surface_variant">Select a teacher to view profile details.</p>
+              )}
             </CardBody>
           </KnowledgeCard>
 
@@ -465,4 +500,12 @@ export default function TeacherManagement() {
 
 function cn(...classes: any[]) {
   return classes.filter(Boolean).join(" ");
+}
+
+function ContactRow({ icon: Icon, text }: { icon: any; text: string }) {
+  return (
+    <p className="flex items-center gap-3 text-sm text-on_surface_variant break-words">
+      <Icon className="h-4 w-4 flex-shrink-0 text-primary" /> {text}
+    </p>
+  );
 }
