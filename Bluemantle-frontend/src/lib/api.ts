@@ -26,6 +26,12 @@ function secureCookieAttribute() {
   return isBrowser() && window.location.protocol === "https:" ? "; Secure" : "";
 }
 
+function expireCookie(name: string, sameSite: "Lax" | "None") {
+  if (!isBrowser()) return;
+  const secure = secureCookieAttribute();
+  document.cookie = `${name}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=${sameSite}${secure}`;
+}
+
 export function getBrowserCookie(name: string) {
   if (!isBrowser()) return "";
 
@@ -46,10 +52,11 @@ export function clearBrowserAuthSession() {
   if (!isBrowser()) return;
 
   ["token", "user_role", "user_name"].forEach((name) => {
-    document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secureCookieAttribute()}`;
-    document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=None${secureCookieAttribute()}`;
+    expireCookie(name, "Lax");
+    expireCookie(name, "None");
   });
   localStorage.removeItem("bluemantle_session");
+  sessionStorage.removeItem("bluemantle_session");
 }
 
 export async function logoutBrowserSession() {
@@ -132,7 +139,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
           const { redirect } = await import("next/navigation");
           redirect("/");
         } else {
-          window.location.href = "/";
+          window.location.replace("/?switch=1");
         }
       }
       throw new Error(data.message || "Something went wrong");

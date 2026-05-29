@@ -8,7 +8,7 @@ export function SessionManager() {
 
   const logout = useCallback(async () => {
     await logoutBrowserSession();
-    window.location.href = "/";
+    window.location.replace("/?switch=1");
   }, []);
 
   useEffect(() => {

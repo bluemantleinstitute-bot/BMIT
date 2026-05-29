@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ClientOnlyDNABackground } from "@/components/ClientOnlyDNABackground";
-import { SecurityGuard } from "@/components/SecurityGuard";
 
 export const metadata: Metadata = {
   title: "Academic Atelier - Bluemantle",
@@ -16,10 +15,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-inter antialiased bg-surface text-on_surface">
-        <SecurityGuard>
-          <ClientOnlyDNABackground />
-          {children}
-        </SecurityGuard>
+        <ClientOnlyDNABackground />
+        {children}
       </body>
     </html>
   );

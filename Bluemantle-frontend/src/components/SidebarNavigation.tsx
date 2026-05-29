@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
 import { logoutBrowserSession } from "@/lib/api";
 import { 
@@ -67,7 +67,6 @@ export type UserRole = "student" | "admin" | "teacher" | "owner";
 
 export function SidebarNavigation({ role = "student" }: { role?: UserRole }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [userName, setUserName] = useState("User");
 
   useEffect(() => {
@@ -89,8 +88,7 @@ export function SidebarNavigation({ role = "student" }: { role?: UserRole }) {
 
   const handleLogout = async () => {
     await logoutBrowserSession();
-    router.replace("/");
-    router.refresh();
+    window.location.replace("/?switch=1");
   };
 
   let items = STUDENT_NAV_ITEMS;
