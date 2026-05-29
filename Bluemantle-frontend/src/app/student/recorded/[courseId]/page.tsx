@@ -79,7 +79,20 @@ export default function CoursePlayerPage({ params }: { params: Promise<{ courseI
   if (!data || !studentId) return <div className="h-screen flex items-center justify-center animate-pulse">Initializing Player...</div>;
 
   const course = data.courseCatalog.find((c: any) => c.id === courseId);
-  if (!course || !activeChapter) return <div className="h-screen flex items-center justify-center">Course not found</div>;
+  if (!course || !activeChapter) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-3 text-center">
+        <Lock className="h-8 w-8 text-primary/50" />
+        <h1 className="font-manrope text-2xl font-bold">Course Not Available</h1>
+        <p className="max-w-md text-sm text-on_surface_variant">
+          This course is not assigned to your batch, or it has no playable chapters yet.
+        </p>
+        <Link href="/student/recorded" className="mt-2 rounded-full bg-primary px-5 py-2 text-sm font-bold text-on_primary">
+          Back to Recorded Academy
+        </Link>
+      </div>
+    );
+  }
 
   const allChapters = course.modules.flatMap((m: any) => 
     m.chapters.map((ch: any) => ({ ...ch, moduleId: m.id }))

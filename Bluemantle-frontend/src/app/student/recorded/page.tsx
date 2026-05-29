@@ -39,7 +39,17 @@ export default function CourseGallery() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {catalog.map((course: any) => {
+        {catalog.length === 0 ? (
+          <KnowledgeCard className="md:col-span-2 lg:col-span-3">
+            <CardBody className="p-12 text-center">
+              <BookOpen className="mx-auto mb-4 h-10 w-10 text-primary/40" />
+              <h2 className="font-manrope text-xl font-bold text-on_surface">No Courses Assigned Yet</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-on_surface_variant">
+                Recorded courses will appear here once the admin assigns courses to your batch.
+              </p>
+            </CardBody>
+          </KnowledgeCard>
+        ) : catalog.map((course: any) => {
           const courseProgress = progressData[course.id];
           const totalChapters = course.modules.reduce((acc: number, mod: any) => acc + mod.chapters.length, 0);
           

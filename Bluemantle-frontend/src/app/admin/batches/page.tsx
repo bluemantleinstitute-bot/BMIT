@@ -8,7 +8,7 @@ import {
   Search, Filter, ArrowLeft, GraduationCap, 
   ShieldAlert, Clock, CheckCircle2, AlertCircle,
   BarChart3, MessageSquareWarning, ExternalLink,
-  Plus, X, Save, Edit3, Trash2
+  Plus, X, Save, Edit3, Trash2, BookOpen
 } from "lucide-react";
 import { db } from "@/lib/db";
 
@@ -19,7 +19,7 @@ export default function AdminBatchesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedBatchData, setSelectedBatchData] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<"Students" | "Faculty" | "Grievances">("Students");
+  const [activeTab, setActiveTab] = useState<"Students" | "Courses" | "Faculty" | "Grievances">("Students");
   
   // New states for Create/Edit
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -32,9 +32,25 @@ export default function AdminBatchesPage() {
   const [formData, setFormData] = useState({
     name: "",
     courseId: "",
+    assignedCourses: [] as string[],
     maxStudents: 100,
     endDate: ""
   });
+
+  const toggleAssignedCourse = (courseId: string) => {
+    setFormData((current) => {
+      const exists = current.assignedCourses.includes(courseId);
+      const nextAssignedCourses = exists
+        ? current.assignedCourses.filter((id) => id !== courseId)
+        : [...current.assignedCourses, courseId];
+
+      return {
+        ...current,
+        assignedCourses: nextAssignedCourses,
+        courseId: nextAssignedCourses[0] || ""
+      };
+    });
+  };
 
 
   // Fetch initial data
@@ -73,6 +89,10 @@ export default function AdminBatchesPage() {
           setFormData({
             name: data.name,
             courseId: data.courseId?._id || "",
+            assignedCourses: [
+              ...(data.assignedCourses || []).map((course: any) => course._id || course),
+              ...(data.courseId?._id ? [data.courseId._id] : [])
+            ].filter((value: string, index: number, list: string[]) => value && list.indexOf(value) === index),
             maxStudents: data.maxStudents,
             endDate: data.endDate ? new Date(data.endDate).toISOString().split('T')[0] : ""
           });
@@ -89,13 +109,17 @@ export default function AdminBatchesPage() {
 
   const handleCreateBatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.assignedCourses.length === 0) {
+      alert("Please assign at least one course to this batch.");
+      return;
+    }
     try {
       setSaving(true);
       await db.user.createBatch(formData);
       const updatedBatches = await db.user.getBatches();
       setBatches(updatedBatches);
       setShowCreateModal(false);
-      setFormData({ name: "", courseId: "", maxStudents: 100, endDate: "" });
+      setFormData({ name: "", courseId: "", assignedCourses: [], maxStudents: 100, endDate: "" });
     } catch (error) {
       console.error("Failed to create batch:", error);
       alert("Failed to create batch");
@@ -106,6 +130,10 @@ export default function AdminBatchesPage() {
 
   const handleUpdateBatch = async () => {
     if (!selectedBatchId) return;
+    if (formData.assignedCourses.length === 0) {
+      alert("Please keep at least one course assigned to this batch.");
+      return;
+    }
     try {
       setSaving(true);
       await db.user.updateBatch(selectedBatchId, formData);
@@ -266,7 +294,7 @@ export default function AdminBatchesPage() {
 
 
          <div className="flex gap-2 border-b border-outline_variant/10">
-            {(["Students", "Faculty", "Grievances"] as const).map(tab => (
+            {(["Students", "Courses", "Faculty", "Grievances"] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -336,6 +364,48 @@ export default function AdminBatchesPage() {
                         ]}
                       />
                    </CardBody>
+                </KnowledgeCard>
+              </div>
+            )}
+
+
+            {activeTab === "Courses" && (
+              <div className="space-y-6">
+                <KnowledgeCard className="p-6 bg-primary/5 border-primary/20">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" /> Assigned Course Access
+                      </h3>
+                      <p className="mt-1 text-xs text-on_surface_variant">
+                        Students in this batch can only see and open the selected courses.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase text-primary">
+                      {formData.assignedCourses.length} selected
+                    </span>
+                  </div>
+
+                  {isEditing ? (
+                    <CourseChecklist
+                      courses={courses}
+                      selectedCourseIds={formData.assignedCourses}
+                      onToggle={toggleAssignedCourse}
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {getBatchAssignedCourses(batch).length > 0 ? (
+                        getBatchAssignedCourses(batch).map((course: any) => (
+                          <div key={course._id || course.id} className="rounded-xl border border-outline_variant/20 bg-surface_container_lowest p-4">
+                            <p className="font-bold text-on_surface">{course.title}</p>
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-outline">Visible to this batch</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-on_surface_variant">No courses assigned yet.</p>
+                      )}
+                    </div>
+                  )}
                 </KnowledgeCard>
               </div>
             )}
@@ -463,10 +533,12 @@ export default function AdminBatchesPage() {
                        </div>
                     </div>
 
-                    <div className="pt-4 border-t border-outline_variant/10 flex justify-between items-center">
+                   <div className="pt-4 border-t border-outline_variant/10 flex justify-between items-center">
                        <div className="flex items-center gap-2">
                           <TrendingUp className="w-3.5 h-3.5 text-primary" />
-                          <span className="text-[10px] font-bold text-primary uppercase">{b.courseId?.title || "No Course"}</span>
+                          <span className="text-[10px] font-bold text-primary uppercase">
+                            {getBatchAssignedCourses(b).length} Course{getBatchAssignedCourses(b).length === 1 ? "" : "s"} Assigned
+                          </span>
                        </div>
                        <button className="text-[10px] font-black uppercase text-outline group-hover:text-primary transition-colors flex items-center gap-1">
                           Cluster Intelligence <ExternalLink className="w-2.5 h-2.5" />
@@ -503,19 +575,16 @@ export default function AdminBatchesPage() {
                        />
                     </div>
 
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-outline uppercase tracking-widest">Select Course Pathway</label>
-                       <select 
-                         required
-                         value={formData.courseId}
-                         onChange={(e) => setFormData({...formData, courseId: e.target.value})}
-                         className="w-full bg-surface_container_low border border-outline_variant/30 rounded-xl px-4 py-3 outline-none focus:border-primary transition-all font-bold appearance-none"
-                       >
-                          <option value="">Choose Course...</option>
-                          {courses.map(c => (
-                            <option key={c._id} value={c._id}>{c.title}</option>
-                          ))}
-                       </select>
+                    <div className="space-y-3">
+                       <div className="flex items-center justify-between">
+                         <label className="text-[10px] font-bold text-outline uppercase tracking-widest">Assign Courses To Batch</label>
+                         <span className="text-[10px] font-bold text-primary uppercase">{formData.assignedCourses.length} selected</span>
+                       </div>
+                       <CourseChecklist
+                         courses={courses}
+                         selectedCourseIds={formData.assignedCourses}
+                         onToggle={toggleAssignedCourse}
+                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -555,4 +624,55 @@ export default function AdminBatchesPage() {
   );
 }
 
+function getBatchAssignedCourses(batch: any) {
+  const courses = [
+    ...(batch.assignedCourses || []),
+    ...(batch.courseId ? [batch.courseId] : [])
+  ].filter(Boolean);
 
+  return courses.filter((course: any, index: number, list: any[]) => {
+    const id = course._id || course.id || course;
+    return list.findIndex((item: any) => (item._id || item.id || item) === id) === index;
+  });
+}
+
+function CourseChecklist({
+  courses,
+  selectedCourseIds,
+  onToggle,
+}: {
+  courses: any[];
+  selectedCourseIds: string[];
+  onToggle: (courseId: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {courses.map((course) => {
+        const checked = selectedCourseIds.includes(course._id);
+        return (
+          <label
+            key={course._id}
+            className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${
+              checked
+                ? "border-primary/50 bg-primary/10"
+                : "border-outline_variant/20 bg-surface_container_lowest hover:border-primary/30"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => onToggle(course._id)}
+              className="mt-1 h-4 w-4 accent-primary"
+            />
+            <span>
+              <span className="block font-bold text-on_surface">{course.title}</span>
+              <span className="mt-1 block text-xs text-on_surface_variant">
+                {course.moduleCount || 0} modules · {course.isPaid ? "Paid" : "Free"}
+              </span>
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
