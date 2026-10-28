@@ -297,7 +297,6 @@ export default function ZoomMeetingSDK({
       const joinMeeting = () => {
         ZoomMtg.join({
           signature: signatureRes.signature,
-          sdkKey: signatureRes.sdkKey,
           meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
           passWord: signatureRes.password ?? password ?? "",
           userName: displayName,
@@ -310,6 +309,14 @@ export default function ZoomMeetingSDK({
           error: (joinError: unknown) => {
             if (!mountedRef.current) return;
             updateStatus("error");
+            // Masked diagnostics only — never log the JWT signature or ZAK.
+            console.warn("[zoom-join] failed", {
+              appKeyMask: signatureRes.appKeyMask,
+              meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
+              role: isHost ? 1 : 0,
+              hasZak: Boolean(isHost && signatureRes.zak),
+              error: describeZoomError(joinError),
+            });
             setError(describeZoomError(joinError));
           },
         });
