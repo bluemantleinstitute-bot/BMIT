@@ -294,9 +294,24 @@ export default function ZoomMeetingSDK({
         throw new Error(signatureRes.message || "Unable to authorize this Zoom session.");
       }
 
+      // Web SDK 3.x (Component View) join() still requires sdkKey/apiKey. The Client ID is public —
+      // it is embedded in the JWT payload. Prefer the API field; fall back to decoding the JWT
+      // so frontend/backend deploy order never matters.
+      const resolveSdkAppKey = (): string => {
+        if (typeof signatureRes.appKey === "string" && signatureRes.appKey) return signatureRes.appKey;
+        try {
+          const claims = JSON.parse(atob(String(signatureRes.signature).split(".")[1] || ""));
+          return typeof claims?.appKey === "string" ? claims.appKey : "";
+        } catch {
+          return "";
+        }
+      };
+      const sdkAppKey = resolveSdkAppKey();
+
       const joinMeeting = () => {
         ZoomMtg.join({
           signature: signatureRes.signature,
+          sdkKey: sdkAppKey,
           meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
           passWord: signatureRes.password ?? password ?? "",
           userName: displayName,
@@ -312,6 +327,7 @@ export default function ZoomMeetingSDK({
             // Masked diagnostics only — never log the JWT signature or ZAK.
             console.warn("[zoom-join] failed", {
               appKeyMask: signatureRes.appKeyMask,
+              hasSdkKey: Boolean(sdkAppKey),
               meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
               role: isHost ? 1 : 0,
               hasZak: Boolean(isHost && signatureRes.zak),
