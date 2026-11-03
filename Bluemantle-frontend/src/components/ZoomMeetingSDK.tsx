@@ -294,59 +294,45 @@ export default function ZoomMeetingSDK({
         throw new Error(signatureRes.message || "Unable to authorize this Zoom session.");
       }
 
-      // Web SDK 3.x (Component View) join() still requires sdkKey/apiKey. The Client ID is public —
-      // it is embedded in the JWT payload. Prefer the API field; fall back to decoding the JWT
-      // so frontend/backend deploy order never matters.
-      const resolveSdkAppKey = (): string => {
-        if (typeof signatureRes.appKey === "string" && signatureRes.appKey) return signatureRes.appKey;
-        try {
-          const claims = JSON.parse(atob(String(signatureRes.signature).split(".")[1] || ""));
-          return typeof claims?.appKey === "string" ? claims.appKey : "";
-        } catch {
-          return "";
-        }
-      };
-      const sdkAppKey = resolveSdkAppKey();
-
       const joinMeeting = () => {
+        // Clear the fallback timer as soon as join is attempted.
+        if (joinFallbackTimerRef.current) {
+          window.clearTimeout(joinFallbackTimerRef.current);
+          joinFallbackTimerRef.current = null;
+        }
+
         ZoomMtg.join({
           signature: signatureRes.signature,
-          sdkKey: sdkAppKey,
           meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
           passWord: signatureRes.password ?? password ?? "",
           userName: displayName,
           userEmail: userEmail || "",
           tk: "",
-          zak: isHost ? signatureRes.zak || "" : "",
+          zak: isHost ? (signatureRes.zak || "") : "",
           success: () => {
-            if (mountedRef.current) updateStatus("connected");
+            if (!mountedRef.current) return;
+            // Join succeeded — mark connected. Do not let CSS selector checks override this.
+            if (joinFallbackTimerRef.current) {
+              window.clearTimeout(joinFallbackTimerRef.current);
+              joinFallbackTimerRef.current = null;
+            }
+            updateStatus("connected");
           },
           error: (joinError: unknown) => {
             if (!mountedRef.current) return;
             updateStatus("error");
-            // Masked diagnostics only — never log the JWT signature or ZAK.
+            // Capture the actual Zoom join error instead of a generic message.
+            const zoomErr = describeZoomError(joinError);
             console.warn("[zoom-join] failed", {
               appKeyMask: signatureRes.appKeyMask,
-              hasSdkKey: Boolean(sdkAppKey),
               meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
               role: isHost ? 1 : 0,
               hasZak: Boolean(isHost && signatureRes.zak),
-              error: describeZoomError(joinError),
+              error: zoomErr,
             });
-            setError(describeZoomError(joinError));
+            setError(zoomErr);
           },
         });
-
-        joinFallbackTimerRef.current = window.setTimeout(() => {
-          if (!mountedRef.current || statusRef.current !== "joining") return;
-          if (hasRenderedZoomUi()) {
-            updateStatus("connected");
-            return;
-          }
-
-          updateStatus("error");
-          setError("Zoom connected, but the classroom view did not mount on screen. Please retry the embedded room.");
-        }, 18000);
       };
 
       ZoomMtg.init({
@@ -366,7 +352,7 @@ export default function ZoomMeetingSDK({
       updateStatus("error");
       setError(describeZoomError(err));
     }
-  }, [applyZoomStageLayout, classId, cleanedMeetingNumber, displayName, hasRenderedZoomUi, isHost, leaveUrl, password, updateStatus, userEmail]);
+  }, [applyZoomStageLayout, classId, cleanedMeetingNumber, displayName, isHost, leaveUrl, password, updateStatus, userEmail]);
 
   useEffect(() => {
     mountedRef.current = true;
