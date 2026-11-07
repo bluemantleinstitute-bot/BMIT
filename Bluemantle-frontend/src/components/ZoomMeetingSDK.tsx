@@ -67,11 +67,7 @@ const describeZoomError = (error: unknown) => {
   }
 };
 
-const ZOOM_SDK_VERSION = "3.13.2";
-const zoomCdnStyles = [
-  `https://source.zoom.us/${ZOOM_SDK_VERSION}/css/bootstrap.css`,
-  `https://source.zoom.us/${ZOOM_SDK_VERSION}/css/react-select.css`,
-];
+const ZOOM_SDK_VERSION = "4.1.0";
 
 const zoomCdnScripts = [
   `https://source.zoom.us/${ZOOM_SDK_VERSION}/lib/vendor/react.min.js`,
@@ -91,15 +87,6 @@ const ZOOM_READY_SELECTORS = [
   ".participants-section-container",
   ".join-dialog",
 ];
-
-const loadStyleOnce = (href: string) => {
-  if (document.querySelector(`link[href="${href}"]`)) return;
-
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-};
 
 const loadScriptOnce = (src: string) => {
   return new Promise<void>((resolve, reject) => {
@@ -132,8 +119,6 @@ const loadZoomClientView = async () => {
   if (window.ZoomMtg) return window.ZoomMtg;
 
   window.__bluemantleZoomClientPromise ??= (async () => {
-    zoomCdnStyles.forEach(loadStyleOnce);
-
     for (const src of zoomCdnScripts) {
       await loadScriptOnce(src);
     }
@@ -146,7 +131,6 @@ const loadZoomClientView = async () => {
     window.ZoomMtg.preLoadWasm?.();
     window.ZoomMtg.prepareWebSDK?.();
     window.ZoomMtg.i18n?.load?.("en-US");
-    window.ZoomMtg.i18n?.reload?.("en-US");
 
     return window.ZoomMtg;
   })();
@@ -303,7 +287,6 @@ export default function ZoomMeetingSDK({
 
         ZoomMtg.join({
           signature: signatureRes.signature,
-          sdkKey: signatureRes.appKey,
           meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
           passWord: signatureRes.password ?? password ?? "",
           userName: displayName,
