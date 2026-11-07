@@ -303,6 +303,7 @@ export default function ZoomMeetingSDK({
 
         ZoomMtg.join({
           signature: signatureRes.signature,
+          sdkKey: signatureRes.appKey,
           meetingNumber: signatureRes.meetingNumber || cleanedMeetingNumber,
           passWord: signatureRes.password ?? password ?? "",
           userName: displayName,
