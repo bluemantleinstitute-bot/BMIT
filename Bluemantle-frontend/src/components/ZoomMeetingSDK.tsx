@@ -339,6 +339,7 @@ export default function ZoomMeetingSDK({
         leaveUrl: window.location.origin + leaveUrl,
         patchJsMedia: true,
         leaveOnPageUnload: true,
+        sdkKey: signatureRes.appKey,
         success: joinMeeting,
         error: (initError: unknown) => {
           if (!mountedRef.current) return;
